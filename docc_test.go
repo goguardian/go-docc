@@ -1,23 +1,25 @@
 package docc
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 var expectedContent = map[string][]string{
-	"./testdata/test.docx":               {"", "Title Subtitle Here is a first row. Here is a second row. ", ""},
+	"./testdata/test.docx":               {"", "Title Subtitle Here is a first row. Here is a second row.   ", ""},
 	"./testdata/test_header_footer.docx": {"test header ", "Title Subtitle Here is a first row. Here is a second row. ", "test footer "},
 }
 
-func TestReadAll(t *testing.T) {
+func TestReaderReadAll(t *testing.T) {
 	for fileName, expectContent := range expectedContent {
-		fp := filepath.Clean(fileName)
-		r, err := NewReader(fp)
+		filePath := filepath.Clean(fileName)
+		r, err := NewReader(filePath)
 		if err != nil {
 			panic(err)
 		}
+
 		defer r.Close()
 		header, content, footer, err := r.ReadAllFiles()
 		if err != nil {
@@ -25,13 +27,43 @@ func TestReadAll(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(expectContent[0], header) {
-			t.Errorf("want %v, got %v for fileName %v", expectContent[0], header, fileName)
+			t.Errorf("want header %v, got %v for fileName %v", expectContent[0], header, fileName)
 		}
 		if !reflect.DeepEqual(expectContent[1], content) {
-			t.Errorf("want %v, got %v for fileName %v", expectContent[1], content, fileName)
+			t.Errorf("want content %v, got %v for fileName %v", expectContent[1], content, fileName)
 		}
 		if !reflect.DeepEqual(expectContent[2], footer) {
-			t.Errorf("want %v, got %v for fileName %v", expectContent[2], footer, fileName)
+			t.Errorf("want footer %v, got %v for fileName %v", expectContent[2], footer, fileName)
+		}
+	}
+}
+
+func TestReaderFromBytesReadAll(t *testing.T) {
+	for fileName, expectContent := range expectedContent {
+		filePath := filepath.Clean(fileName)
+		fileBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			panic(err)
+		}
+
+		r, err := NewReaderFromBytes(fileBytes)
+		if err != nil {
+			panic(err)
+		}
+		defer r.CloseReaderFromBytes()
+		header, content, footer, err := r.ReadAllFiles()
+		if err != nil {
+			panic(err)
+		}
+
+		if !reflect.DeepEqual(expectContent[0], header) {
+			t.Errorf("want header %v, got %v for fileName %v", expectContent[0], header, fileName)
+		}
+		if !reflect.DeepEqual(expectContent[1], content) {
+			t.Errorf("want content %v, got %v for fileName %v", expectContent[1], content, fileName)
+		}
+		if !reflect.DeepEqual(expectContent[2], footer) {
+			t.Errorf("want footer %v, got %v for fileName %v", expectContent[2], footer, fileName)
 		}
 	}
 }

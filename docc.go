@@ -2,6 +2,7 @@ package docc
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -27,6 +28,41 @@ type Reader struct {
 	fromDoc     bool
 	docx        *zip.ReadCloser
 	fileReaders []FileReader
+}
+
+// NewReader generetes a Reader struct.
+// After reading, the Reader struct shall be Close().
+func NewReaderFromBytes(byteValues []byte) (*Reader, error) {
+	reader := new(Reader)
+
+	byteReader := bytes.NewReader(byteValues)
+	zipReadCloser, err := zip.NewReader(byteReader, int64(len(byteValues)))
+	if err != nil {
+		return nil, err
+	}
+
+	var fileReaders []FileReader
+	for _, file := range zipReadCloser.File {
+		if file.Name == "word/document.xml" ||
+			strings.Contains(file.Name, "header") ||
+			strings.Contains(file.Name, "footer") ||
+			strings.Contains(file.Name, "footnotes") {
+			openedFile, err := zipReadCloser.Open(file.Name)
+			if err != nil {
+				return nil, err
+			}
+
+			fileReaders = append(fileReaders, FileReader{
+				fileName: file.Name,
+				xml:      openedFile,
+				decoder:  xml.NewDecoder(openedFile),
+			})
+		}
+	}
+
+	reader.fileReaders = fileReaders
+
+	return reader, nil
 }
 
 // NewReader generetes a Reader struct.
@@ -113,6 +149,16 @@ func (r *Reader) ReadAllFiles() (headerValue, contentValue, footerValue string, 
 	}
 
 	return header.String(), content.String(), footer.String(), nil
+}
+
+func (r *Reader) CloseReaderFromBytes() error {
+	for _, fileReader := range r.fileReaders {
+		fileReader.xml.Close()
+	}
+	if r.fromDoc {
+		os.Remove(r.docxPath)
+	}
+	return nil
 }
 
 func (r *Reader) Close() error {
