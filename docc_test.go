@@ -8,8 +8,8 @@ import (
 )
 
 var expectedContent = map[string][]string{
-	"./testdata/test.docx":               {"", "Title Subtitle Here is a first row. Here is a second row.   ", ""},
-	"./testdata/test_header_footer.docx": {"test header ", "Title Subtitle Here is a first row. Here is a second row. ", "test footer "},
+	"./testdata/test.docx":               {"", "Title Subtitle Here is a first row. Here is a second row.", "", ""},
+	"./testdata/test_header_footer.docx": {"test header", "Title Subtitle Here is a first row. Here is a second row.", "test footer", ""},
 }
 
 func TestReaderReadAll(t *testing.T) {
@@ -21,7 +21,7 @@ func TestReaderReadAll(t *testing.T) {
 		}
 
 		defer r.Close()
-		header, content, footer, err := r.ReadAllFiles()
+		header, content, footer, footnotes, err := r.ReadAllFiles()
 		if err != nil {
 			panic(err)
 		}
@@ -34,6 +34,9 @@ func TestReaderReadAll(t *testing.T) {
 		}
 		if !reflect.DeepEqual(expectContent[2], footer) {
 			t.Errorf("want footer %v, got %v for fileName %v", expectContent[2], footer, fileName)
+		}
+		if !reflect.DeepEqual(expectContent[3], footnotes) {
+			t.Errorf("want footnotes %v, got %v for fileName %v", expectContent[3], footnotes, fileName)
 		}
 	}
 }
@@ -50,8 +53,8 @@ func TestReaderFromBytesReadAll(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		defer r.CloseReaderFromBytes()
-		header, content, footer, err := r.ReadAllFiles()
+		defer r.Close()
+		header, content, footer, footnotes, err := r.ReadAllFiles()
 		if err != nil {
 			panic(err)
 		}
@@ -64,6 +67,9 @@ func TestReaderFromBytesReadAll(t *testing.T) {
 		}
 		if !reflect.DeepEqual(expectContent[2], footer) {
 			t.Errorf("want footer %v, got %v for fileName %v", expectContent[2], footer, fileName)
+		}
+		if !reflect.DeepEqual(expectContent[3], footnotes) {
+			t.Errorf("want footnotes %v, got %v for fileName %v", expectContent[3], footnotes, fileName)
 		}
 	}
 }

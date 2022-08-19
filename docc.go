@@ -30,24 +30,14 @@ type Reader struct {
 	fileReaders []FileReader
 }
 
-// NewReader generetes a Reader struct.
-// After reading, the Reader struct shall be Close().
-func NewReaderFromBytes(byteValues []byte) (*Reader, error) {
-	reader := new(Reader)
-
-	byteReader := bytes.NewReader(byteValues)
-	zipReadCloser, err := zip.NewReader(byteReader, int64(len(byteValues)))
-	if err != nil {
-		return nil, err
-	}
-
+func getFileReaders(zipReader *zip.Reader) ([]FileReader, error) {
 	var fileReaders []FileReader
-	for _, file := range zipReadCloser.File {
+	for _, file := range zipReader.File {
 		if file.Name == "word/document.xml" ||
 			strings.Contains(file.Name, "header") ||
 			strings.Contains(file.Name, "footer") ||
 			strings.Contains(file.Name, "footnotes") {
-			openedFile, err := zipReadCloser.Open(file.Name)
+			openedFile, err := zipReader.Open(file.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -59,7 +49,24 @@ func NewReaderFromBytes(byteValues []byte) (*Reader, error) {
 			})
 		}
 	}
+	return fileReaders, nil
+}
 
+// NewReader generetes a Reader struct.
+// After reading, the Reader struct shall be Close().
+func NewReaderFromBytes(byteValues []byte) (*Reader, error) {
+	reader := new(Reader)
+
+	byteReader := bytes.NewReader(byteValues)
+	zipReader, err := zip.NewReader(byteReader, int64(len(byteValues)))
+	if err != nil {
+		return nil, err
+	}
+
+	fileReaders, err := getFileReaders(zipReader)
+	if err != nil {
+		return nil, err
+	}
 	reader.fileReaders = fileReaders
 
 	return reader, nil
@@ -80,26 +87,12 @@ func NewReader(docxPath string) (*Reader, error) {
 		return nil, err
 	}
 
-	var fileReaders []FileReader
-	for _, file := range zipReadCloser.File {
-		if file.Name == "word/document.xml" ||
-			strings.Contains(file.Name, "header") ||
-			strings.Contains(file.Name, "footer") ||
-			strings.Contains(file.Name, "footnotes") {
-			openedFile, err := zipReadCloser.Open(file.Name)
-			if err != nil {
-				return nil, err
-			}
-
-			fileReaders = append(fileReaders, FileReader{
-				fileName: file.Name,
-				xml:      openedFile,
-				decoder:  xml.NewDecoder(openedFile),
-			})
-		}
+	fileReaders, err := getFileReaders(&zipReadCloser.Reader)
+	if err != nil {
+		return nil, err
 	}
-
 	reader.fileReaders = fileReaders
+
 	reader.docx = zipReadCloser
 
 	return reader, nil
@@ -131,41 +124,45 @@ func (r *Reader) readSingleFile(decoder *xml.Decoder) (string, error) {
 	}
 }
 
-func (r *Reader) ReadAllFiles() (headerValue, contentValue, footerValue string, err error) {
-	var header, footer, content strings.Builder
+// ReadAllFiles reads all header, footer, footnote and content related files in
+// the zip archive and returns it's raw contents
+func (r *Reader) ReadAllFiles() (headerValue, contentValue, footerValue, footnotesValue string, err error) {
+	var header, footer, footnotes, content strings.Builder
 	for _, fileReader := range r.fileReaders {
 		fileContent, err := r.readSingleFile(fileReader.decoder)
 		if err != nil {
-			return "", "", "", err
+			return "", "", "", "", err
 		}
 
 		if strings.Contains(fileReader.fileName, "header") {
 			header.WriteString(fileContent)
 		} else if strings.Contains(fileReader.fileName, "footer") {
 			footer.WriteString(fileContent)
+		} else if strings.Contains(fileReader.fileName, "footnotes") {
+			footnotes.WriteString(fileContent)
 		} else {
 			content.WriteString(fileContent)
 		}
 	}
 
-	return header.String(), content.String(), footer.String(), nil
+	return trimmedString(header.String()),
+		trimmedString(content.String()),
+		trimmedString(footer.String()),
+		trimmedString(footnotes.String()),
+		nil
 }
 
-func (r *Reader) CloseReaderFromBytes() error {
-	for _, fileReader := range r.fileReaders {
-		fileReader.xml.Close()
-	}
-	if r.fromDoc {
-		os.Remove(r.docxPath)
-	}
-	return nil
+func trimmedString(input string) string {
+	return strings.TrimSpace(input)
 }
 
 func (r *Reader) Close() error {
 	for _, fileReader := range r.fileReaders {
 		fileReader.xml.Close()
 	}
-	r.docx.Close()
+	if r.docx != nil {
+		r.docx.Close()
+	}
 	if r.fromDoc {
 		os.Remove(r.docxPath)
 	}
